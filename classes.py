@@ -1,6 +1,6 @@
 
 # Author - Andrei Bobu
-# Last updated 17 May 2020
+# Last updated 21 May 2020
 # This code provides several algorithms that make clustering on the GBM model 
 
 
@@ -142,13 +142,13 @@ def checkSign (vector):
 	return labels_pred
 
 def eigenvectorAnalysis (matrix, eig_max_order, val):
-		#detect communities from the sign of the second eigenvector of the adjacency matrix
-		vals, vecs = sparse.linalg.eigs(matrix.asfptype() , k=eig_max_order, which = 'SM')
-		idx = min_list(vals, val)
-		secondVector = vecs[:,idx]
-		secondVector = secondVector.astype('float64')
-		labels_pred_spectral = checkSign(secondVector)
-		return labels_pred_spectral
+	#detect communities from the sign of the second eigenvector of the adjacency matrix
+	vals, vecs = sparse.linalg.eigs(matrix.asfptype() , k=eig_max_order, which = 'SM')
+	idx = min_list(vals, val)
+	secondVector = vecs[:,idx]
+	secondVector = secondVector.astype('float64')
+	labels_pred_spectral = checkSign(secondVector)
+	return labels_pred_spectral
 
 def neg(x):
 	if x == 0:
@@ -157,7 +157,7 @@ def neg(x):
 		return 0
 
 def interval_u(x):
-		return np.exp(special.lambertw((1/x-1)/np.exp(1)) + 1)
+	return np.exp(special.lambertw((1/x-1)/np.exp(1)) + 1)
 
 def k_means(eigenvectors, n):
 	m = len(eigenvectors)
@@ -231,8 +231,23 @@ class Motif_Counting_second_paper:
 				labels_pred[node] = k
 			k = k+1
 		
+		# fig, ax1 = plt.subplots(1, 1, sharey = True, figsize=(14, 7))
+		# pos = nx.spring_layout(Gc)
+		# nx.draw(Gc, pos, ax1, with_labels=False, node_color='black', edge_color = 'gray', node_size = 20)
+		# plt.show()
+		# plt.close()	
+
+		if nx.number_connected_components(Gc) <= 1:
+			A = nx.adjacency_matrix(Gc)
+			clustering = SpectralClustering(n_clusters=2, 
+				assign_labels="discretize",
+				affinity = 'precomputed',
+				random_state=0).fit(A)
+			labels_pred = clustering.labels_
+
 		self.labels = labels_pred
 		self.accuracy = G.GetAccuracy(labels_pred)
+
 		# print("Accuracy = %.3f" % self.accuracy)
 
 	def __init__(self, G):
@@ -244,7 +259,7 @@ def process(G, edge, Es, Ed):
 	if (count/G.number_of_nodes() >= Es or count/G.number_of_nodes() <= Ed):
 		return True
 	else:
-		return False
+			return False
 	
 def f1(t,b):
 	return (2*b+t) * np.log( (2*b+t)/(2*b) ) - t - 1
@@ -261,9 +276,154 @@ def g2(t,b):
 ### New algorithm based on the expansion of the interval around the points
 
 class Expansion_algorithm:
+	def Iteration(self, G, threshold, zero_node):
+		# Passed set is the total set of nodes of the same community as zero_node
+		passed_set = [zero_node]
+
+		# Current nodes is a set of "active" vertices whose common neighbours we count 
+		current_nodes = [zero_node]
+		update_flg = 1
+
+		# Iterate until no updates happen
+		while update_flg == 1:
+			# New nodes is a set of nodes added on this step
+			new_nodes = []
+			for c in current_nodes:
+				for u in set(self.list_neighbrs[c]) - set(passed_set): # Check all the neighbours of the current node c
+					cmn_nmbr = self.list_neighbrs[u] & self.list_neighbrs[c] # Check the number of common neighbours of a current node c
+					if len(cmn_nmbr) > threshold: # If the number of common neighbours is really high we say that c and u are of the same community
+						new_nodes.append(u)
+						passed_set.append(u)
+
+			# Now all new found nodes become "active"
+			current_nodes = new_nodes 
+
+			# If now update happened the cycle is stopped
+			if len(new_nodes) <= 0:
+				update_flg = 0
+
+		return passed_set
 
 	def analysis(self, G, a, b):
 		n = G.number_of_nodes()
+
+		# Threshold from the theoretical draft
+		threshold = 2*G.b*interval_u(2*G.b)*np.log(n)
+		# print(threshold)
+
+		# Form a list of neighbours for each vertex in a form of set: that works faster
+		list_neighbrs = {}
+		for v in G.nodes:
+			list_neighbrs.update({v: set(nx.neighbors(G, v))})
+		self.list_neighbrs = list_neighbrs
+
+		# print("The graph...")
+		Gc = nx.Graph()
+		Gc.add_nodes_from(G)
+
+		A = nx.adjacency_matrix(G).asfptype()
+		A_2 = A.dot(A)
+		A_2 = A_2.multiply(1/threshold)
+		A_2 = A_2.astype(np.float64)
+		A_2.setdiag(0)
+		A_2 = A_2.floor()
+		A_2 = A_2.sign()
+		A_2 = A_2.astype(int)
+		A_2.eliminate_zeros()
+		
+		Gc = nx.from_scipy_sparse_matrix(A_2, parallel_edges = False)
+		# # # print(edges)
+		# Gc.add_edges_from(edges)
+
+		# print(Gc.number_of_nodes())
+		# print(Gc.number_of_edges())
+		# print(list(nx.neighbors(Gc, 0)))
+	
+
+		# fig, ax1 = plt.subplots(1, 1, sharey = True, figsize=(14, 7))
+		# pos = nx.spring_layout(Gc)
+		# nx.draw(Gc, pos, ax1, with_labels=False, node_color='black', edge_color = 'gray', node_size = 20)
+		# plt.show()
+		# plt.close()		
+
+		# print("Components...")
+		cc = [c for c in sorted(nx.connected_components(Gc), key=len, reverse=True)][:50]
+		if len(cc) <= 1:
+			A = nx.adjacency_matrix(Gc)
+			clustering = SpectralClustering(n_clusters=2, 
+				assign_labels="discretize",
+				affinity = 'precomputed',
+				random_state=0).fit(A)
+			labels_pred = clustering.labels_
+
+			self.labels = labels_pred
+			self.accuracy = G.GetAccuracy(self.labels)
+			return 
+
+		cc_labels = []
+		c0_edges = []
+		c1_edges = []
+		cluster0 = cc[0]
+		cluster1 = cc[1]
+		for c in cc:
+			c_labels = np.array([G.nodes[v]['ground_label'] for v in c])
+			cc_labels += [np.mean(c_labels)]
+			edges_to_0 = nx.cut_size(G, cc[0], c)
+			edges_to_1 = nx.cut_size(G, cc[1], c)
+			c0_edges += [edges_to_0]
+			c1_edges += [edges_to_1]
+			if edges_to_0 > 0 and edges_to_1 == 0:
+				# print("I'm here")
+				cluster1 = cluster1.union(c)
+			if edges_to_0 == 0 and edges_to_1 > 0:
+				# print("I'm here")
+				cluster0 = cluster0.union(c)
+			if edges_to_0 > 0 and edges_to_1 > 0 and c not in (cc[0], cc[1]):
+				if edges_to_0 > edges_to_1:
+					cluster1 = cluster1.union(c)
+				else:
+					cluster0 = cluster0.union(c)
+		cc_lens = [len(c) for c in cc]
+		# print("Connected components:")
+		# print(cc_lens[:20])
+		# print("Average labels in connected components:")
+		# print(cc_labels[:20])
+		# print("Number of edges to 0 community:")
+		# print(c0_edges[:20])
+		# print("Number of edges to 1 community:")
+		# print(c1_edges[:20])
+		# print(len(cluster0), len(cluster1))
+
+
+		# Start with a random node 
+		zero_node = choice(list(G))
+
+		# Run a an iteration of the algorithm
+		# iter_labels = self.Iteration(G, threshold, zero_node)
+		# print(len(iter_labels))
+
+		labels_pred = [random.randint(0,1) for i in range(n)]
+		# labels_pred = np.ones(n)
+		for v in cluster0:
+			labels_pred[v] = 0
+		for v in cluster1:
+			labels_pred[v] = 1
+
+		self.labels = labels_pred
+		self.accuracy = G.GetAccuracy(labels_pred)
+		# print(len(passed_set))
+		# print(self.accuracy) 
+
+	def __init__(self, G):
+		self.accuracy = 0
+		self.analysis(G, G.a, G.b)
+
+class Expansion_algorithm_choose_min:
+
+	def analysis(self, G, a, b):
+		n = G.number_of_nodes()
+
+		# Threshold from the theoretical draft
 		threshold = 2*G.b*interval_u(2*G.b)*np.log(n)
 		# print(threshold)
 
@@ -273,14 +433,13 @@ class Expansion_algorithm:
 
 		current_node = choice(list(G))
 		passed_set = [current_node]
-		nodes_on_step = []
 		update_flg = 1
 
 		while len(passed_set) < G.n_1 and update_flg == 1:
 			nodes_on_step = []
 			for u in list(set(list_neighbrs[current_node]) - set(passed_set)):
-				cmn_nmbr = list_neighbrs[u] & list_neighbrs[current_node]
-				if len(cmn_nmbr) > threshold:
+				cmn_nmbr = len(list_neighbrs[u] & list_neighbrs[current_node])
+				if cmn_nmbr > threshold:
 					nodes_on_step.append(u)
 					passed_set.append(u)
 
@@ -325,6 +484,7 @@ class Spectral_k_means:
 		optimal_vectors = [vecs[:, i] for i in range(int(portion * n)) if condition(i)]
 		k = len(optimal_vectors)
 
+		labels_pred = np.zeros(n)
 		min_sum_labels = n
 		j_min = -1
 		for j in range(1, k+1):
@@ -447,7 +607,7 @@ def full_simulation(algo_list, a_start = 1, a_finish = 2, a_step = 1, b = 1, n_1
 
 	for a in np.arange(a_start, a_finish, a_step):
 		cur_step = {"a": a}
-		s = 'a = ' + str(a) + ', b = ' + str(b) + ', '
+		s = 'a = ' + str(a) + ', b = ' + str(b) + ', n = ' + str(n_1 + n_2) + ', '
 		acc_dict = {A.__name__: 0 for A in algo_list}
 		time_dict = {A.__name__: 0 for A in algo_list}
 		for i in range(n_trials): 
@@ -464,6 +624,9 @@ def full_simulation(algo_list, a_start = 1, a_finish = 2, a_step = 1, b = 1, n_1
 		for A in algo_list:
 			s = s + A.__name__ + ' = ' + str(np.around(acc_dict[A.__name__] * 100)) + '% (' + str(int(time_dict[A.__name__])) + 'sec), '
 		print(s)
+		f= open("output.txt","a+")
+		f.write(s + '\n')
+		f.close()
 
 		cur_step.update(acc_dict)
 		acc_array.append(cur_step) 		
@@ -479,6 +642,7 @@ def full_simulation(algo_list, a_start = 1, a_finish = 2, a_step = 1, b = 1, n_1
 	plt.xlabel('$a$')
 	plt.ylabel('$accuracy$')
 	plt.grid(True)
+	plt.savefig("b_" + str(b) + "_n_" + str(n_1 + n_2) + ".png")
 	plt.show()
 
 	return acc_array 
