@@ -28,7 +28,7 @@ from random import choice
 
 class GBM_graph(nx.Graph):
 
-<<<<<<< HEAD
+
     # Procedure to generate points in 1-dimensional torus
 
     def add_node(self, ground_label):
@@ -132,7 +132,7 @@ class GBM_graph(nx.Graph):
             # print(ground_labels)
 
             return max(accuracy_score(labels_pred_list, ground_labels), accuracy_score(neg_labels_pred_list, ground_labels))
-=======
+
 	# Procedure to generate points in 1-dimensional torus
 
 	def add_node(self, ground_label):
@@ -1428,4 +1428,3 @@ class k_means_analysis:
 		self.spectrum = vals
 		self.accs = accs
 		self.accuracy = accuracy
->>>>>>> 677ea9d810bf82875f63193f571584a47b39c861
