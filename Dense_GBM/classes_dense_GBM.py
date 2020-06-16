@@ -373,6 +373,7 @@ class Expansion_algorithm:
 
 		# Threshold from the theoretical draft
 		threshold = 2*G.b*interval_u(2*G.b)*np.log(n)
+		# threshold = 1.105*2*G.r_out*n
 		# print(threshold)
 
 		# Form a list of neighbours for each vertex in a form of set: that works faster
@@ -412,6 +413,7 @@ class Expansion_algorithm:
 
 		# print("Components...")
 		cc = [c for c in sorted(nx.connected_components(Gc), key=len, reverse=True)][:50]
+		# print("Number of components: %d" % len(cc))
 		if len(cc) <= 1:
 			A = nx.adjacency_matrix(Gc)
 			clustering = SpectralClustering(n_clusters=2, 
@@ -430,8 +432,8 @@ class Expansion_algorithm:
 		cluster0 = cc[0]
 		cluster1 = cc[1]
 		for c in cc:
-			c_labels = np.array([G.nodes[v]['ground_label'] for v in c])
-			cc_labels += [np.mean(c_labels)]
+			# c_labels = np.array([G.nodes[v]['ground_label'] for v in c])
+			# cc_labels += [np.mean(c_labels)]
 			edges_to_0 = nx.cut_size(G, cc[0], c)
 			edges_to_1 = nx.cut_size(G, cc[1], c)
 			c0_edges += [edges_to_0]
@@ -460,7 +462,7 @@ class Expansion_algorithm:
 
 
 		# Start with a random node 
-		zero_node = choice(list(G))
+		# zero_node = choice(list(G))
 
 		# Run a an iteration of the algorithm
 		# iter_labels = self.Iteration(G, threshold, zero_node)
@@ -867,7 +869,7 @@ class k_means_analysis:
 		step = 2*(G.a**2 + G.b**2)*np.log(n)/(G.a+G.b)/n
 
 		if len(vectors) <= 0:
-			vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 2 * step and vals[i] < optimal_val + 3 * step]
+			vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 3 * step and vals[i] < optimal_val + step]
 		else:
 			vec_idxs = vectors 
 
