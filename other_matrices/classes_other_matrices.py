@@ -939,10 +939,17 @@ def full_simulation(algo_list, a_start = 1, a_finish = 2, a_step = 1, b = 1, n_1
 # Draft
 
 
-def calc_a_hat(adj_matrix, sigma=0.5):
+def calc_a_hat(adj_matrix, sigma=0.5, tau = 0):
     nnodes = adj_matrix.shape[0]
     a = adj_matrix
-    D_vec = np.sum(a, axis=1).A1
+    if sigma == 0:
+        D_vec = (np.sum(a, axis=1).A1 + tau).astype(np.float64)
+        D_left = sparse.diags(D_vec ** (sigma - 1))
+        # print(len(D_vec[D_vec <= 0]))
+        AD = D_left.dot(a)
+        return sparse.eye(nnodes) - AD
+
+    D_vec = np.sum(a, axis=1).A1 + tau
     D_left = sparse.diags(D_vec ** (-sigma))
     D_right = sparse.diags(D_vec ** (sigma - 1)) 
     
@@ -951,8 +958,17 @@ def calc_a_hat(adj_matrix, sigma=0.5):
 
     return sparse.eye(nnodes) - DAD
 
+def bethe_hessian_matrix(adj_matrix, xi = 0.5, h = 0.5):
+    nnodes = adj_matrix.shape[0]
+
+    D_vec = np.sum(adj_matrix, axis=1).A1
+    D = sparse.diags(D_vec)
+    I = sparse.eye(nnodes)
+
+    return (xi**2 * D - xi * adj_matrix)/(1 - xi**2) + (1 + h**2) * I / (1 - h**2)
+
 class k_means_analysis:
-    def __init__(self, G, n = 2000, portion = 0.02, vectors = [13], spectrum_disp = False, cut_disp = False, vectors_disp = False, k_means_disp = False, sigma = 0.5):
+    def __init__(self, G, n = 2000, portion = 0.02, vectors = [13], spectrum_disp = False, cut_disp = False, vectors_disp = False, k_means_disp = False, sigma = 0.5, tau = 0, xi = 0.5, h = 0.5):
         iters = []
         spectrum = []
         accs = []
@@ -960,11 +976,11 @@ class k_means_analysis:
         n = G.number_of_nodes()
 
         # laplacian_matrix = nx.laplacian_matrix(G)
-        # adj_matrix = nx.adjacency_matrix(G)
-        # norm_laplacian = calc_a_hat(adj_matrix, sigma = sigma)
+        adj_matrix = nx.adjacency_matrix(G)
+        bh_matrix = bethe_hessian_matrix(adj_matrix, xi = xi, h = h)
         norm_laplacian = nx.normalized_laplacian_matrix(G)
 
-        vals, vecs = sparse.linalg.eigs(norm_laplacian.asfptype() , k=int(portion * n), which = 'SM')
+        vals, vecs = sparse.linalg.eigs(bh_matrix.asfptype() , k=int(portion * n), which = 'SM')
         # vals, vecs = sp_real_eigsort(A = norm_laplacian.asfptype(), k = int(0.02 * n), which = 'SR')
         # print(vals)
         ground_labels = nx.get_node_attributes(G, 'ground_label')
@@ -972,7 +988,7 @@ class k_means_analysis:
         step = 2*(G.a**2 + G.b**2)*np.log(n)/(G.a+G.b)/n
 
         if len(vectors) <= 0:
-            vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 3 * step and vals[i] < optimal_val + 3 * step]
+            vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 2 * step and vals[i] < optimal_val + 2 * step]
         else:
             vec_idxs = vectors 
 
@@ -980,8 +996,10 @@ class k_means_analysis:
         if spectrum_disp:
             sns.set()
             plt.rcParams['figure.figsize'] = [14, 7]
+            # asymp_spectrum = [np.sin(2 * np.pi * k * a) / (2 * pi * k) for k in ]
 
             plt.scatter(vals, [1 for i in range(len(vals))], marker='o', facecolors='none', edgecolors='b')
+            # plt.scatter(asymp_spectrum, [1 for i in range(len(vals))], marker='o', facecolors='none', edgecolors='b')
             plt.axvline(x = optimal_val, linewidth = 2, color='black')
             plt.xlabel(r"spectrum")
             plt.ylabel(r"iterations")

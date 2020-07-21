@@ -30,11 +30,7 @@ class GBM_graph(nx.Graph):
 
 	# Procedure to generate points in 1-dimensional torus
 
-	def add_node(self, i, ground_label):
-		# if i <= self.n_1/2:
-		# 	coordinate = i/self.n_1
-		# else:
-		# 	coordinate = (i + 0.5) / self.n_2
+	def add_node(self, ground_label):
 		coordinate = np.random.uniform(0,1)
 		super().add_node(len(self.nodes), coordinate = coordinate, ground_label=ground_label, label = 0)
 	
@@ -75,15 +71,13 @@ class GBM_graph(nx.Graph):
 		self.r_out = b 
 		self.a = a * (n_1 + n_2) / np.log(n_1 + n_2)
 		self.b = b * (n_1 + n_2) / np.log(n_1 + n_2)
-		self.real_a = a
-		self.real_b = b
 
 		# Add nodes from the community "0"... 
 		for i in range(self.n_1):
-			self.add_node(i, 0)
+			self.add_node(0)
 		# and nodes from the community "1"
 		for i in range(self.n_2):
-			self.add_node(i, 1)
+			self.add_node(1)
 
 		# self.ground_labels = [self.nodes[node]["ground_label"] for node in self.nodes]
 		self.ground_labels = list(nx.get_node_attributes(self, 'ground_label').values())
@@ -860,11 +854,6 @@ def full_simulation(algo_list, a_start = 1, a_finish = 2, a_step = 1, b = 1, n_1
 
 # Draft
 
-# def sinc(x):
-# 	if x == 0:
-# 		return 
-# 	np.sin(2 * np.pi * k * G.real_a) * n / (np.pi * k)
-
 class k_means_analysis:
 	def __init__(self, G, n = 2000, portion = 0.02, vectors = [13], spectrum_disp = False, cut_disp = False, vectors_disp = False, k_means_disp = False):
 		iters = []
@@ -873,41 +862,22 @@ class k_means_analysis:
 		number_of_edges = []
 		n = G.number_of_nodes()
 
-		# laplacian_matrix = nx.normalized_laplacian_matrix(G)
-		laplacian_matrix = nx.adjacency_matrix(G)
-		vals, vecs = sparse.linalg.eigs(laplacian_matrix.asfptype() , k=int(portion * (G.n_1 + G.n_2)), which = 'LM')
+		laplacian_matrix = nx.normalized_laplacian_matrix(G)
+		vals, vecs = sparse.linalg.eigs(laplacian_matrix.asfptype() , k=int(portion * (G.n_1 + G.n_2)), which = 'SM')
 		ground_labels = nx.get_node_attributes(G, 'ground_label')
-		optimal_val = n * (G.real_a - G.real_b)
-		step = n/400
+		optimal_val = 2*G.b/(G.a + G.b)
+		step = 2*(G.a**2 + G.b**2)*np.log(n)/(G.a+G.b)/n
 
 		if len(vectors) <= 0:
-			vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 3 * step and vals[i] < optimal_val + 3 * step]
+			vec_idxs = [i for i in range(int(n * portion)) if vals[i] > optimal_val - 3 * step and vals[i] < optimal_val + step]
 		else:
 			vec_idxs = vectors 
-
-		exact_spectrum = []
-		for k in range(n):
-			j = 1 
-			temp_sum = 0
-			while j < G.real_b * n:
-				temp_sum += np.cos(2 * np.pi * k * j / n)
-				j+= 1
-
-			j = int((G.real_b * n + 1)/ 2)
-			while j < G.real_a * n / 2:
-				temp_sum += np.cos(4 * np.pi * k * j / n)
-				j+= 1
-			exact_spectrum += [2* temp_sum]
-
 
 		if spectrum_disp:
 			sns.set()
 			plt.rcParams['figure.figsize'] = [14, 7]
-			asymp_spectrum = [(np.sin(2 * np.pi * k * G.real_a)  + np.sin(2 * np.pi * k * G.real_b)) * n / (2 * np.pi * k) for k in range(int(n))]
 
 			plt.scatter(vals, [1 for i in range(len(vals))], marker='o', facecolors='none', edgecolors='b')
-			plt.scatter(asymp_spectrum, [1 for i in range(int(n))], marker='o', facecolors='none', edgecolors='r')
-			plt.scatter(exact_spectrum, [1 for i in range(int(n))], marker='o', facecolors='none', edgecolors='g')
 			plt.axvline(x = optimal_val, linewidth = 2, color='black')
 			plt.xlabel(r"spectrum")
 			plt.ylabel(r"iterations")
@@ -935,7 +905,7 @@ class k_means_analysis:
 				coordinates1 = [G.nodes[node]["coordinate"] for node in G if G.nodes[node]['ground_label'] == 1]
 
 				plt.scatter(coordinates0, vector[:int(n/2)])
-				plt.scatter(coordinates1, vector[int(n/2):]) 
+				plt.scatter(coordinates1, vector[int(n/2):])
 				plt.title("i = " + str(i) + ", eigenvalue = " + str(vals[i]) + ", accuracy = " + str(accuracy))
 				plt.show()				
 
@@ -963,7 +933,7 @@ class k_means_analysis:
 				c_norms += [np.linalg.norm(sum(km['centers']))]
 
 			sns.set()
-			plt.plot(vec_idxs, accs, marker='o')
+			plt.plot(vec_idxs, accs, marker='o', label = 'Iteration ' + str(i))
 			plt.xlabel("Order of eigenvector")
 			plt.ylabel("Accuracy")
 			plt.show()
